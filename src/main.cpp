@@ -27,11 +27,18 @@
 #include <Wire.h>
 #include "SSD1306.h"
 
-SSD1306  display(0x3c, 5, 4);
+#include "OLEDDisplayUi.h"
+#include "images.h"
+
+SSD1306 display(0x3c, 5, 4);
+OLEDDisplayUi ui(&display);
 
 const char* ssid = "Headquarter";
 const char* password = "commandcenter";
 const char* mqtt_server = "m13.cloudmqtt.com";
+
+String message = "No new message...";
+bool msgRead = true;
 
 void callback(char* topic, byte* payload, unsigned int length) {
   String msg = "";
@@ -42,15 +49,10 @@ void callback(char* topic, byte* payload, unsigned int length) {
   for (int i = 0; i < length; i++) {
     msg = msg + (char)payload[i];
   }
+  message = msg;
+  msgRead = false;
   Serial.print(msg);
   Serial.println();
-
-  display.clear();
-  display.setTextAlignment(TEXT_ALIGN_LEFT);
-  display.setFont(ArialMT_Plain_16);
-  display.drawString(0, 0, msg);
-  display.display();
-
 }
 
 WiFiClient espClient;
@@ -70,19 +72,52 @@ void setup_wifi() {
     Serial.print(".");
   }
 
-  Serial.println("");
+  Serial.println();
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
 }
 
-void drawJson() {
-  // Font Demo1
-  // create more fonts at http://oleddisplay.squix.ch/
-  display.setTextAlignment(TEXT_ALIGN_LEFT);
-  display.setFont(ArialMT_Plain_16);
-  display.drawString(0, 0, "Hello World!");
+void drawStatusBar(OLEDDisplay *display, OLEDDisplayUiState* state) {
+  if (WiFi.status() == WL_CONNECTED) {
+    display->drawXbm(2, 2, wifi_width, wifi_height, wifi_bits);
+  }
+  if (client.connected() == true) {
+    display->drawXbm(20, 2, mqtt_width, mqtt_height, mqtt_bits);
+  }
+  if (! msgRead) {
+    display->drawXbm(110, 2, newMsg_width, newMsg_height, newMsg_bits);
+  }
 }
+
+void drawDaysTogether(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
+  display->setTextAlignment(TEXT_ALIGN_CENTER);
+  display->setFont(ArialMT_Plain_24);
+  display->drawString(x + 64, y + 13, "76");
+  display->setFont(ArialMT_Plain_16);
+  display->drawString(x + 64, y + 36, "Days Together");
+}
+
+void drawMessage(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
+  display->setTextAlignment(TEXT_ALIGN_CENTER);
+  display->setFont(ArialMT_Plain_16);
+  display->drawString(x + 64, y + 13, message);
+  msgRead = true;
+}
+
+void nextBtnInterrupt() {
+  ui.nextFrame();
+}
+
+void prevBtnInterrupt() {
+  ui.previousFrame();
+}
+
+FrameCallback frames[] = { drawDaysTogether, drawMessage };
+int frameCount = 2;
+
+OverlayCallback overlays[] = { drawStatusBar };
+int overlaysCount = 1;
 
 void setup() {
   Serial.begin(115200);
@@ -90,28 +125,39 @@ void setup() {
   Serial.println("Hello!!!");
   Serial.println();
 
+  attachInterrupt(12, prevBtnInterrupt, FALLING);
+  attachInterrupt(13, nextBtnInterrupt, FALLING);
+  // attachInterrupt(0, testInterrupt, CHANGE);
+
+  ui.setTargetFPS(60);
+  ui.setActiveSymbol(activeSymbol);
+  ui.setInactiveSymbol(inactiveSymbol);
+  ui.setIndicatorPosition(BOTTOM);
+  ui.setIndicatorDirection(LEFT_RIGHT);
+  ui.setFrameAnimation(SLIDE_LEFT);
+  ui.disableAutoTransition();
+  ui.setFrames(frames, frameCount);
+  ui.setOverlays(overlays, overlaysCount);
+  ui.init();
+  display.flipScreenVertically();
+
+  ui.update(); // Draws the initial taskbar
+
   setup_wifi();
 
   if (client.connect("poyu_dev", "poyu-device", "b_0b>>w|S//i")) {
     client.subscribe("poyu");
   }
 
-  display.init();
-  display.flipScreenVertically();
-  display.setFont(ArialMT_Plain_16);
-
-  drawJson();
 }
 
 void loop() {
-  // clear the display
-  // display.clear();
-  client.loop();
-  // display.setTextAlignment(TEXT_ALIGN_RIGHT);
-  // display.drawString(10, 128, String(millis()));
-  // write the buffer to the display
-  // display.display();
+  int remainingTimeBudget = ui.update();
 
-  // counter++;
-  delay(500);
+  if (remainingTimeBudget > 0) {
+    // You can do some work here
+    // Don't do stuff if you are below your
+    // time budget.
+    client.loop();
+  }
 }
