@@ -23,21 +23,24 @@
 *
 */
 #include <ESP8266WiFi.h>
+#include <DNSServer.h>
+#include <ESP8266WebServer.h>
+#include <WiFiManager.h>
 #include <PubSubClient.h>
 #include <Wire.h>
 #include "SSD1306.h"
 
 #include "OLEDDisplayUi.h"
 #include "images.h"
+#include "settings.h"
 
 SSD1306 display(0x3c, 5, 4);
 OLEDDisplayUi ui(&display);
 
-const char* ssid = "Headquarter";
-const char* password = "commandcenter";
 const char* mqtt_server = "m13.cloudmqtt.com";
 
 String message = "No new message...";
+String daysTogether = "--";
 bool msgRead = true;
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -49,8 +52,15 @@ void callback(char* topic, byte* payload, unsigned int length) {
   for (int i = 0; i < length; i++) {
     msg = msg + (char)payload[i];
   }
-  message = msg;
-  msgRead = false;
+
+  if ((String)topic == TOPIC) {
+    message = msg;
+    msgRead = false;
+  } else if ((String)topic == "days") {
+    Serial.println("Update days");
+    daysTogether = msg;
+  }
+
   Serial.print(msg);
   Serial.println();
 }
@@ -60,17 +70,9 @@ PubSubClient client(mqtt_server, 12577, callback, espClient);
 
 void setup_wifi() {
   delay(10);
-  // We start by connecting to a WiFi network
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
 
-  WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
+  WiFiManager wifiManager;
+  wifiManager.autoConnect("MsgMe");
 
   Serial.println();
   Serial.println("WiFi connected");
@@ -93,7 +95,7 @@ void drawStatusBar(OLEDDisplay *display, OLEDDisplayUiState* state) {
 void drawDaysTogether(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
   display->setTextAlignment(TEXT_ALIGN_CENTER);
   display->setFont(ArialMT_Plain_24);
-  display->drawString(x + 64, y + 13, "76");
+  display->drawString(x + 64, y + 13, daysTogether);
   display->setFont(ArialMT_Plain_16);
   display->drawString(x + 64, y + 36, "Days Together");
 }
@@ -127,7 +129,6 @@ void setup() {
 
   attachInterrupt(12, prevBtnInterrupt, FALLING);
   attachInterrupt(13, nextBtnInterrupt, FALLING);
-  // attachInterrupt(0, testInterrupt, CHANGE);
 
   ui.setTargetFPS(60);
   ui.setActiveSymbol(activeSymbol);
@@ -145,8 +146,9 @@ void setup() {
 
   setup_wifi();
 
-  if (client.connect("poyu_dev", "poyu-device", "b_0b>>w|S//i")) {
-    client.subscribe("poyu");
+  if (client.connect(BROKER_USERNAME, BROKER_USERNAME, BROKER_PASSWORD)) {
+    client.subscribe(TOPIC);
+    client.subscribe("days");
   }
 
 }

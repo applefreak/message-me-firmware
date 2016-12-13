@@ -1,0 +1,9 @@
+#if DEV_A
+#define BROKER_USERNAME "device-a"
+#define BROKER_PASSWORD "password_a"
+#define TOPIC "device-a"
+#elif DEV_B
+#define BROKER_USERNAME "device-b"
+#define BROKER_PASSWORD "password_b"
+#define TOPIC "device-b"
+#endif
