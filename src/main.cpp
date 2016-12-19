@@ -102,8 +102,8 @@ void drawDaysTogether(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x
 
 void drawMessage(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
   display->setTextAlignment(TEXT_ALIGN_CENTER);
-  display->setFont(ArialMT_Plain_16);
-  display->drawString(x + 64, y + 13, message);
+  display->setFont(ArialMT_Plain_10);
+  display->drawStringMaxWidth(x + 64, y + 13, 128, message);
   msgRead = true;
 }
 
@@ -149,6 +149,9 @@ void setup() {
   if (client.connect(BROKER_USERNAME, BROKER_USERNAME, BROKER_PASSWORD)) {
     client.subscribe(TOPIC);
     client.subscribe("days");
+    delay(1000);
+    client.publish("request", "days");
+    client.publish("request", TOPIC);
   }
 
 }
